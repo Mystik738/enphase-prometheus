@@ -23,23 +23,25 @@ type inverterList struct {
 	inverters []inverter
 }
 
-func getEnvoyJson() []byte {
+func getEnvoyJson() ([]byte, error) {
 	log.Println("Getting Envoy json from " + os.Getenv("ENVOY_URL") + "/api/v1/production/inverters")
 	t := dac.NewTransport(os.Getenv("USERNAME"), os.Getenv("PASSWORD"))
 	req, err := http.NewRequest("GET", os.Getenv("ENVOY_URL")+"/api/v1/production/inverters", nil)
 	resp, err := t.RoundTrip(req)
-	checkErr(err)
+	if err != nil {
+		return []byte("[]"), err
+	}
 
 	defer resp.Body.Close()
 
 	body, err := ioutil.ReadAll(resp.Body)
 	checkErr(err)
 
-	return body
+	return body, nil
 }
 
 func metrics(w http.ResponseWriter, req *http.Request) {
-	inverterJson := getEnvoyJson()
+	inverterJson, _ := getEnvoyJson()
 	var inverters []inverter
 	json.Unmarshal(inverterJson, &inverters)
 
@@ -52,12 +54,8 @@ func metrics(w http.ResponseWriter, req *http.Request) {
 }
 
 func main() {
-	log.Println("Starting server")
 	http.HandleFunc("/metrics", metrics)
-	port := os.Getenv("PORT")
-	log.Println("Port is", port)
-	err := http.ListenAndServe(":"+port, nil)
-	checkErr(err)
+	http.ListenAndServe(":"+os.Getenv("PORT"), nil)
 }
 
 func checkErr(err error) {
