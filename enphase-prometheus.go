@@ -55,7 +55,7 @@ func metrics(w http.ResponseWriter, req *http.Request) {
 
 func main() {
 	http.HandleFunc("/metrics", metrics)
-	http.ListenAndServe(":"+os.Getenv("PORT"), nil)
+	http.ListenAndServe(":80", nil)
 }
 
 func checkErr(err error) {
