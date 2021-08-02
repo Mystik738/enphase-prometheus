@@ -23,8 +23,8 @@ type inverterList struct {
 	inverters []inverter
 }
 
-func getEnvoyJson() ([]byte, error) {
-	log.Println("Getting Envoy json from " + os.Getenv("ENVOY_URL") + "/api/v1/production/inverters")
+func getInverterJson() ([]byte, error) {
+	log.Println("Getting system json from " + os.Getenv("ENVOY_URL") + "/api/v1/production/inverters")
 	t := dac.NewTransport(os.Getenv("USERNAME"), os.Getenv("PASSWORD"))
 	req, err := http.NewRequest("GET", os.Getenv("ENVOY_URL")+"/api/v1/production/inverters", nil)
 	resp, err := t.RoundTrip(req)
@@ -40,22 +40,53 @@ func getEnvoyJson() ([]byte, error) {
 	return body, nil
 }
 
+func getSystemJson() ([]byte, error) {
+	log.Println("Getting system json from " + os.Getenv("ENVOY_URL") + "/production.json")
+	resp, err := http.Get(os.Getenv("ENVOY_URL") + "/production.json")
+	if resp.StatusCode != http.StatusOK {
+		return []byte("[]"), fmt.Errorf("Received http status %d", resp.StatusCode)
+	}
+
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	checkErr(err)
+
+	return body, nil
+}
+
 func metrics(w http.ResponseWriter, req *http.Request) {
-	inverterJson, _ := getEnvoyJson()
+	inverterJson, _ := getInverterJson()
 	var inverters []inverter
 	json.Unmarshal(inverterJson, &inverters)
 
 	log.Println("Received data from", len(inverters), "inverters.")
 
-	fmt.Fprintf(w, "# TYPE reported_wattage gauge\n")
+	fmt.Fprintf(w, "# TYPE reported_watts gauge\n")
 	for _, inverter := range inverters {
-		fmt.Fprintf(w, "reported_wattage{serial_number=\"%s\"} %d\n", inverter.SerialNumber, inverter.LastReportWatts)
+		fmt.Fprintf(w, "reported_watts{serial_number=\"%s\"} %d\n", inverter.SerialNumber, inverter.LastReportWatts)
+	}
+
+	systemJson, err := getSystemJson()
+	if err == nil {
+		var system map[string]interface{}
+		json.Unmarshal(systemJson, &system)
+
+		//Some whacky conversion here, but simpler than defining the whole json object
+		totalWattage := int(system["production"].([]interface{})[0].(map[string]interface{})["wNow"].(float64))
+
+		log.Println("Received system data, current total watts is", totalWattage)
+		fmt.Fprintf(w, "\n# TYPE total_watts gauge\n")
+		fmt.Fprintf(w, "total_watts %d\n", totalWattage)
+	} else {
+		log.Println("Error retrieving system data.")
 	}
 }
 
 func main() {
 	http.HandleFunc("/metrics", metrics)
 	http.ListenAndServe(":80", nil)
+	log.Println("Server ready to serve.")
 }
 
 func checkErr(err error) {
