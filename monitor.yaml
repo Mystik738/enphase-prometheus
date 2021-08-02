@@ -1,0 +1,83 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: enphase-prometheus
+  name: enphase-prometheus
+  namespace: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: enphase-prometheus
+  template:
+    metadata:
+      labels:
+        app: enphase-prometheus
+    spec:
+      containers:
+      - env:
+        - name: ENVOY_URL
+          value: "http://192.168.1.125"
+        - name: USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: envoy-credentials
+              key: username
+        - name: PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: envoy-credentials
+              key: password
+        image: mystik738/enphase-prometheus
+        name: enphase-prometheus
+        ports:
+        - containerPort: 80
+          name: http
+        readinessProbe:
+          httpGet:
+            path: /metrics
+            port: http
+        resources:
+          limits:
+            cpu: 200m
+            memory: 200Mi
+          requests:
+            cpu: 100m
+            memory: 100Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: enphase-prometheus
+  name: enphase-prometheus
+  namespace: monitoring
+spec:
+  ports:
+  - name: metrics
+    port: 8099
+    targetPort: 80
+    protocol: TCP
+  selector:
+    app: enphase-prometheus
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: enphase-prometheus-sm
+  namespace: monitoring
+  labels:
+    app: enphase-prometheus
+spec:
+  selector:
+    matchLabels:
+      app: enphase-prometheus
+  endpoints:
+  - port: metrics 
+    targetPort: 8099
+    interval: 10s   
+    honorLabels: true
+    metricRelabelings:
+    - action: labeldrop
+      regex: instance
