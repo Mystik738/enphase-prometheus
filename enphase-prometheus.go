@@ -19,14 +19,11 @@ type inverter struct {
 	MaxReportWatts  int    `json:"maxReportWatts"`
 }
 
-type inverterList struct {
-	inverters []inverter
-}
-
 func getInverterJson() ([]byte, error) {
 	log.Println("Getting system json from " + os.Getenv("ENVOY_URL") + "/api/v1/production/inverters")
 	t := dac.NewTransport(os.Getenv("USERNAME"), os.Getenv("PASSWORD"))
 	req, err := http.NewRequest("GET", os.Getenv("ENVOY_URL")+"/api/v1/production/inverters", nil)
+	checkErr(err)
 	resp, err := t.RoundTrip(req)
 	if err != nil {
 		return []byte("[]"), err
@@ -43,8 +40,9 @@ func getInverterJson() ([]byte, error) {
 func getSystemJson() ([]byte, error) {
 	log.Println("Getting system json from " + os.Getenv("ENVOY_URL") + "/production.json")
 	resp, err := http.Get(os.Getenv("ENVOY_URL") + "/production.json")
+	checkErr(err)
 	if resp.StatusCode != http.StatusOK {
-		return []byte("[]"), fmt.Errorf("Received http status %d", resp.StatusCode)
+		return []byte("[]"), fmt.Errorf("received http status %d", resp.StatusCode)
 	}
 
 	defer resp.Body.Close()
