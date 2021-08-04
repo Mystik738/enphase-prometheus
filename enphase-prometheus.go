@@ -7,8 +7,25 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
+	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	dac "github.com/xinsnake/go-http-digest-auth-client"
+)
+
+var (
+	registry       *prometheus.Registry
+	reported_watts = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "reported_watts",
+		Help: "Watts reported by individual inverters.",
+	}, []string{"serial_number"})
+	total_watts = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "total_watts",
+		Help: "Total watts reported by the system.",
+	})
 )
 
 type inverter struct {
@@ -53,36 +70,53 @@ func getSystemJson() ([]byte, error) {
 	return body, nil
 }
 
-func metrics(w http.ResponseWriter, req *http.Request) {
-	inverterJson, _ := getInverterJson()
-	var inverters []inverter
-	json.Unmarshal(inverterJson, &inverters)
+func metrics() {
+	log.Println("Initializing metrics.")
+	registry = prometheus.NewRegistry()
+	registry.MustRegister(total_watts)
+	registry.MustRegister(reported_watts)
 
-	log.Println("Received data from", len(inverters), "inverters.")
+	go func() {
+		for {
+			log.Println("Retrieving metrics.")
+			inverterJson, _ := getInverterJson()
+			var inverters []inverter
+			json.Unmarshal(inverterJson, &inverters)
 
-	fmt.Fprintf(w, "# TYPE reported_watts gauge\n")
-	for _, inverter := range inverters {
-		fmt.Fprintf(w, "reported_watts{serial_number=\"%s\"} %d\n", inverter.SerialNumber, inverter.LastReportWatts)
-	}
+			log.Println("Received data from", len(inverters), "inverters.")
 
-	systemJson, err := getSystemJson()
-	if err == nil {
-		var system map[string]interface{}
-		json.Unmarshal(systemJson, &system)
+			for _, inverter := range inverters {
+				reported_watts.With(prometheus.Labels{"serial_number": inverter.SerialNumber}).Set(float64(inverter.LastReportWatts))
+			}
 
-		//Some whacky conversion here, but simpler than defining the whole json object
-		totalWattage := int(system["production"].([]interface{})[0].(map[string]interface{})["wNow"].(float64))
+			systemJson, err := getSystemJson()
+			if err == nil {
+				var system map[string]interface{}
+				json.Unmarshal(systemJson, &system)
 
-		log.Println("Received system data, current total watts is", totalWattage)
-		fmt.Fprintf(w, "\n# TYPE total_watts gauge\n")
-		fmt.Fprintf(w, "total_watts %d\n", totalWattage)
-	} else {
-		log.Println("Error retrieving system data.")
-	}
+				//Some whacky conversion here, but simpler than defining the whole json object
+				totalWattage := int(system["production"].([]interface{})[0].(map[string]interface{})["wNow"].(float64))
+
+				log.Println("Received system data, current total watts is", totalWattage)
+				total_watts.Set(float64(totalWattage))
+			} else {
+				total_watts.Set(float64(0))
+				log.Println("Error retrieving system data.")
+			}
+
+			sleep := 10
+			if os.Getenv("SLEEP_SECONDS") != "" {
+				sleep, err = strconv.Atoi(os.Getenv("SLEEP_SECONDS"))
+				checkErr(err)
+			}
+			time.Sleep(time.Duration(sleep) * time.Second)
+		}
+	}()
 }
 
 func main() {
-	http.HandleFunc("/metrics", metrics)
+	metrics()
+	http.Handle("/metrics", promhttp.HandlerFor(registry, promhttp.HandlerOpts{}))
 	http.ListenAndServe(":80", nil)
 	log.Println("Server ready to serve.")
 }

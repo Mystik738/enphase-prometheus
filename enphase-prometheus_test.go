@@ -8,6 +8,9 @@ import (
 	"net/http/httptest"
 	"os"
 	"testing"
+	"time"
+
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func TestMetricsSuccess(t *testing.T) {
@@ -18,13 +21,17 @@ func TestMetricsSuccess(t *testing.T) {
 		}
 		if req.URL.String() == "/production.json" {
 			rw.WriteHeader(http.StatusOK)
-			fmt.Fprintf(rw, "{\"production\":[{\"type\":\"inverters\",\"activeCount\":14,\"readingTime\":0,\"wNow\":0,\"whLifetime\":248190},{\"type\":\"eim\",\"activeCount\":0,\"measurementType\":\"production\",\"readingTime\":1627874283,\"wNow\":0.0,\"whLifetime\":0.0,\"varhLeadLifetime\":0.0,\"varhLagLifetime\":0.0,\"vahLifetime\":0.0,\"rmsCurrent\":2.365,\"rmsVoltage\":236.641,\"reactPwr\":276.755,\"apprntPwr\":279.56,\"pwrFactor\":0.0,\"whToday\":0.0,\"whLastSevenDays\":0.0,\"vahToday\":0.0,\"varhLeadToday\":0.0,\"varhLagToday\":0.0}],\"consumption\":[{\"type\":\"eim\",\"activeCount\":0,\"measurementType\":\"total-consumption\",\"readingTime\":1627874283,\"wNow\":0.0,\"whLifetime\":0.0,\"varhLeadLifetime\":0.0,\"varhLagLifetime\":0.0,\"vahLifetime\":0.0,\"rmsCurrent\":2.074,\"rmsVoltage\":236.704,\"reactPwr\":-276.755,\"apprntPwr\":490.918,\"pwrFactor\":0.0,\"whToday\":0.0,\"whLastSevenDays\":0.0,\"vahToday\":0.0,\"varhLeadToday\":0.0,\"varhLagToday\":0.0},{\"type\":\"eim\",\"activeCount\":0,\"measurementType\":\"net-consumption\",\"readingTime\":1627874283,\"wNow\":-0.0,\"whLifetime\":0.0,\"varhLeadLifetime\":0.0,\"varhLagLifetime\":0.0,\"vahLifetime\":0.0,\"rmsCurrent\":0.291,\"rmsVoltage\":236.766,\"reactPwr\":0.0,\"apprntPwr\":34.442,\"pwrFactor\":0.0,\"whToday\":0,\"whLastSevenDays\":0,\"vahToday\":0,\"varhLeadToday\":0,\"varhLagToday\":0}],\"storage\":[{\"type\":\"acb\",\"activeCount\":0,\"readingTime\":0,\"wNow\":0,\"whNow\":0,\"state\":\"idle\"}]}")
+			fmt.Fprintf(rw, "{\"production\":[{\"type\":\"inverters\",\"activeCount\":14,\"readingTime\":0,\"wNow\":10,\"whLifetime\":248190},{\"type\":\"eim\",\"activeCount\":0,\"measurementType\":\"production\",\"readingTime\":1627874283,\"wNow\":0.0,\"whLifetime\":0.0,\"varhLeadLifetime\":0.0,\"varhLagLifetime\":0.0,\"vahLifetime\":0.0,\"rmsCurrent\":2.365,\"rmsVoltage\":236.641,\"reactPwr\":276.755,\"apprntPwr\":279.56,\"pwrFactor\":0.0,\"whToday\":0.0,\"whLastSevenDays\":0.0,\"vahToday\":0.0,\"varhLeadToday\":0.0,\"varhLagToday\":0.0}],\"consumption\":[{\"type\":\"eim\",\"activeCount\":0,\"measurementType\":\"total-consumption\",\"readingTime\":1627874283,\"wNow\":0.0,\"whLifetime\":0.0,\"varhLeadLifetime\":0.0,\"varhLagLifetime\":0.0,\"vahLifetime\":0.0,\"rmsCurrent\":2.074,\"rmsVoltage\":236.704,\"reactPwr\":-276.755,\"apprntPwr\":490.918,\"pwrFactor\":0.0,\"whToday\":0.0,\"whLastSevenDays\":0.0,\"vahToday\":0.0,\"varhLeadToday\":0.0,\"varhLagToday\":0.0},{\"type\":\"eim\",\"activeCount\":0,\"measurementType\":\"net-consumption\",\"readingTime\":1627874283,\"wNow\":-0.0,\"whLifetime\":0.0,\"varhLeadLifetime\":0.0,\"varhLagLifetime\":0.0,\"vahLifetime\":0.0,\"rmsCurrent\":0.291,\"rmsVoltage\":236.766,\"reactPwr\":0.0,\"apprntPwr\":34.442,\"pwrFactor\":0.0,\"whToday\":0,\"whLastSevenDays\":0,\"vahToday\":0,\"varhLeadToday\":0,\"varhLagToday\":0}],\"storage\":[{\"type\":\"acb\",\"activeCount\":0,\"readingTime\":0,\"wNow\":0,\"whNow\":0,\"state\":\"idle\"}]}")
 		}
 	})).Close()
-
+	metrics()
+	//we need to allow the metrics to collect
+	time.Sleep(time.Duration(250) * time.Millisecond)
+	handler := initPrometheus()
 	req := httptest.NewRequest("GET", "http://example.com/metrics", nil)
 	w := httptest.NewRecorder()
-	metrics(w, req)
+
+	handler.ServeHTTP(w, req)
 
 	res := w.Result()
 	defer res.Body.Close()
@@ -32,9 +39,9 @@ func TestMetricsSuccess(t *testing.T) {
 	data, err := ioutil.ReadAll(res.Body)
 	checkErr(err)
 
-	if len(data) != 747 {
+	if len(data) != 864 {
 		log.Println(string(data))
-		t.Errorf("data should be 747 characters long, is %d", len(data))
+		t.Errorf("data should be 864 characters long, is %d", len(data))
 	}
 }
 
@@ -64,16 +71,20 @@ func TestSystemJsonFailure(t *testing.T) {
 			rw.WriteHeader(http.StatusInternalServerError)
 		}
 	})).Close()
+	metrics()
+	//we need to allow the metrics to collect
+	time.Sleep(time.Duration(250) * time.Millisecond)
+	handler := initPrometheus()
 
 	data, err := getSystemJson()
 	log.Printf("Returned %s", data)
 	if err == nil {
 		t.Errorf("expected error to not be nil")
 	}
-
 	req := httptest.NewRequest("GET", "http://example.com/metrics", nil)
 	w := httptest.NewRecorder()
-	metrics(w, req)
+
+	handler.ServeHTTP(w, req)
 
 	res := w.Result()
 	defer res.Body.Close()
@@ -81,15 +92,20 @@ func TestSystemJsonFailure(t *testing.T) {
 	data, err = ioutil.ReadAll(res.Body)
 	checkErr(err)
 
-	if len(data) != 707 {
+	if len(data) != 863 {
 		log.Println(string(data))
-		t.Errorf("data should be 707 characters long, is %d", len(data))
+		t.Errorf("data should be 863 characters long, is %d", len(data))
 	}
+}
+
+func initPrometheus() http.Handler {
+	return promhttp.HandlerFor(registry, promhttp.HandlerOpts{})
 }
 
 func initEnvoyServer(handler http.HandlerFunc) *httptest.Server {
 	os.Setenv("USERNAME", "envoy")
 	os.Setenv("PASSWORD", "123456")
+	os.Setenv("SLEEP_SECONDS", "10")
 
 	server := httptest.NewServer(handler)
 
