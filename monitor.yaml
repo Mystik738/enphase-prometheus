@@ -81,3 +81,5 @@ spec:
     metricRelabelings:
     - action: labeldrop
       regex: instance
+    - action: labeldrop
+      regex: pod
