@@ -130,6 +130,9 @@ func streams() {
 
 	go func() {
 		t := dac.NewTransport(os.Getenv("USERNAME"), os.Getenv("PASSWORD"))
+		t.HTTPClient = &http.Client{
+			Timeout: time.Second * 3600,
+		}		
 		retries := 1
 		for {
 			log.Println("Reading from stream.")
@@ -140,11 +143,11 @@ func streams() {
 				retries = 1
 				reader := bufio.NewReader(resp.Body)
 				var stream map[string]threePhase
-				for {
-					line, err := reader.ReadBytes('\n')
+				line, err := reader.ReadBytes('\n')
+				for err == nil {
+					log.Println(string(line))
 					if len(line) > 2 {
 						line = line[6:]
-						checkErr(err)
 						json.Unmarshal(line, &stream)
 
 						for phaseType := range stream {
@@ -160,6 +163,8 @@ func streams() {
 							}
 						}
 					}
+
+					line, err = reader.ReadBytes('\n')
 				}
 			} else {
 				log.Println("Error reading from stream.")
@@ -222,7 +227,8 @@ func main() {
 	metrics()
 	streams()
 	http.Handle("/metrics", promhttp.HandlerFor(registry, promhttp.HandlerOpts{}))
-	http.ListenAndServe(":80", nil)
+	err := http.ListenAndServe(":80", nil)
+	checkErr(err)
 	log.Println("Server ready to serve.")
 }
 
