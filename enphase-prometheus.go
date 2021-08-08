@@ -19,11 +19,13 @@ import (
 )
 
 var (
+	arrayLocations map[string]geo
+
 	registry       *prometheus.Registry
 	reported_watts = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "reported_watts",
 		Help: "watts reported by individual inverters.",
-	}, []string{"serial_number"})
+	}, []string{"serial_number", "x", "y"})
 	total_watts = promauto.NewGauge(prometheus.GaugeOpts{
 		Name: "total_watts",
 		Help: "total watts reported by the system.",
@@ -64,6 +66,56 @@ type inverter struct {
 	DevType         int    `json:"devType"`
 	LastReportWatts int    `json:"lastReportWatts"`
 	MaxReportWatts  int    `json:"maxReportWatts"`
+}
+
+//Generated with https://mholt.github.io/json-to-go/
+type arrayLayout struct {
+	SystemID   int `json:"system_id"`
+	Rotation   int `json:"rotation"`
+	Dimensions struct {
+		XMin int `json:"x_min"`
+		XMax int `json:"x_max"`
+		YMin int `json:"y_min"`
+		YMax int `json:"y_max"`
+	} `json:"dimensions"`
+	Arrays []struct {
+		ArrayID int    `json:"array_id"`
+		Label   string `json:"label"`
+		X       int    `json:"x"`
+		Y       int    `json:"y"`
+		Azimuth int    `json:"azimuth"`
+		Modules []struct {
+			ModuleID int `json:"module_id"`
+			Rotation int `json:"rotation"`
+			X        int `json:"x"`
+			Y        int `json:"y"`
+			Inverter struct {
+				InverterID int    `json:"inverter_id"`
+				SerialNum  string `json:"serial_num"`
+			} `json:"inverter"`
+		} `json:"modules"`
+		Dimensions struct {
+			XMin int `json:"x_min"`
+			XMax int `json:"x_max"`
+			YMin int `json:"y_min"`
+			YMax int `json:"y_max"`
+		} `json:"dimensions"`
+		Tilt            int    `json:"tilt"`
+		ArrayTypeName   string `json:"array_type_name"`
+		PcuCount        int    `json:"pcu_count"`
+		PvModuleDetails struct {
+			Manufacturer string      `json:"manufacturer"`
+			Model        string      `json:"model"`
+			Type         interface{} `json:"type"`
+			PowerRating  interface{} `json:"power_rating"`
+		} `json:"pv_module_details"`
+	} `json:"arrays"`
+	Haiku string `json:"haiku"`
+}
+
+type geo struct {
+	X int
+	Y int
 }
 
 type phase struct {
@@ -132,7 +184,7 @@ func streams() {
 		t := dac.NewTransport(os.Getenv("USERNAME"), os.Getenv("PASSWORD"))
 		t.HTTPClient = &http.Client{
 			Timeout: time.Second * 3600,
-		}		
+		}
 		retries := 1
 		for {
 			log.Println("Reading from stream.")
@@ -145,7 +197,6 @@ func streams() {
 				var stream map[string]threePhase
 				line, err := reader.ReadBytes('\n')
 				for err == nil {
-					log.Println(string(line))
 					if len(line) > 2 {
 						line = line[6:]
 						json.Unmarshal(line, &stream)
@@ -181,8 +232,26 @@ func streams() {
 
 func metrics() {
 	log.Println("Initializing metrics.")
+
+	if os.Getenv("ARRAY_LAYOUT") != "" {
+		log.Println("Reading layout information.")
+		arrayLocations = make(map[string]geo)
+		var arrayDefinition arrayLayout
+		json.Unmarshal([]byte(os.Getenv("ARRAY_LAYOUT")), &arrayDefinition)
+
+		for _, solarArray := range arrayDefinition.Arrays {
+			for _, module := range solarArray.Modules {
+				arrayLocations[module.Inverter.SerialNum] = geo{
+					X: module.X,
+					Y: module.Y,
+				}
+			}
+		}
+
+		registry.Register(reported_watts)
+	}
+	registry.Register(reported_watts)
 	registry.MustRegister(total_watts)
-	registry.MustRegister(reported_watts)
 
 	go func() {
 		for {
@@ -194,7 +263,11 @@ func metrics() {
 			log.Println("Received data from", len(inverters), "inverters.")
 
 			for _, inverter := range inverters {
-				reported_watts.With(prometheus.Labels{"serial_number": inverter.SerialNumber}).Set(float64(inverter.LastReportWatts))
+				if val, ok := arrayLocations[inverter.SerialNumber]; ok {
+					reported_watts.With(prometheus.Labels{"serial_number": inverter.SerialNumber, "x": strconv.Itoa(val.X), "y": strconv.Itoa(val.Y)}).Set(float64(inverter.LastReportWatts))
+				} else {
+					reported_watts.With(prometheus.Labels{"serial_number": inverter.SerialNumber, "x": "0", "y": "0"}).Set(float64(inverter.LastReportWatts))
+				}
 			}
 
 			systemJson, err := getSystemJson()

@@ -14,36 +14,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-func TestStreamsSuccess(t *testing.T) {
-	registry = prometheus.NewRegistry()
-	defer initEnvoyServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
-		if req.URL.String() == "/stream/meter" {
-			rw.WriteHeader(http.StatusOK)
-			fmt.Fprintf(rw, "data: {\"production\":{\"ph-a\":{\"p\":-0.0,\"q\":138.135,\"s\":139.586,\"v\":118.313,\"i\":1.18,\"pf\":0.0,\"f\":60.0},\"ph-b\":{\"p\":0.0,\"q\":137.861,\"s\":140.002,\"v\":118.371,\"i\":1.182,\"pf\":0.0,\"f\":60.0},\"ph-c\":{\"p\":0.0,\"q\":0.0,\"s\":0.0,\"v\":0.0,\"i\":0.0,\"pf\":0.0,\"f\":0.0}},\"net-consumption\":{\"ph-a\":{\"p\":0.0,\"q\":0.0,\"s\":17.442,\"v\":118.302,\"i\":0.147,\"pf\":0.0,\"f\":60.0},\"ph-b\":{\"p\":-0.0,\"q\":0.0,\"s\":16.803,\"v\":118.371,\"i\":0.141,\"pf\":0.0,\"f\":60.0},\"ph-c\":{\"p\":0.0,\"q\":0.0,\"s\":0.0,\"v\":0.0,\"i\":0.0,\"pf\":0.0,\"f\":0.0}},\"total-consumption\":{\"ph-a\":{\"p\":-0.0,\"q\":-138.135,\"s\":156.955,\"v\":118.307,\"i\":1.327,\"pf\":-0.0,\"f\":60.0},\"ph-b\":{\"p\":0.0,\"q\":-137.861,\"s\":123.278,\"v\":118.371,\"i\":1.041,\"pf\":0.0,\"f\":60.0},\"ph-c\":{\"p\":0.0,\"q\":0.0,\"s\":0.0,\"v\":0.0,\"i\":0.0,\"pf\":0.0,\"f\":0.0}}}\n\n")
-		}
-	})).Close()
-	streams()
-	time.Sleep(time.Duration(250) * time.Millisecond)
-	handler := initPrometheus()
-	req := httptest.NewRequest("GET", "http://example.com/metrics", nil)
-	w := httptest.NewRecorder()
-
-	handler.ServeHTTP(w, req)
-
-	res := w.Result()
-	defer res.Body.Close()
-
-	data, err := ioutil.ReadAll(res.Body)
-	checkErr(err)
-
-	if len(data) != 864 {
-		log.Println(string(data))
-		t.Errorf("data should be 864 characters long, is %d", len(data))
-	}
-}
-
 func TestMetricsSuccess(t *testing.T) {
-	registry = prometheus.NewRegistry()
+	handler := initPrometheus()
 	defer initEnvoyServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		if req.URL.String() == "/api/v1/production/inverters" {
 			rw.WriteHeader(http.StatusOK)
@@ -57,7 +29,7 @@ func TestMetricsSuccess(t *testing.T) {
 	metrics()
 	//we need to allow the metrics to collect
 	time.Sleep(time.Duration(250) * time.Millisecond)
-	handler := initPrometheus()
+
 	req := httptest.NewRequest("GET", "http://example.com/metrics", nil)
 	w := httptest.NewRecorder()
 
@@ -69,9 +41,9 @@ func TestMetricsSuccess(t *testing.T) {
 	data, err := ioutil.ReadAll(res.Body)
 	checkErr(err)
 
-	if len(data) != 864 {
+	if len(data) != 1097 {
 		log.Println(string(data))
-		t.Errorf("data should be 864 characters long, is %d", len(data))
+		t.Errorf("data should be 1097 characters long, is %d", len(data))
 	}
 }
 
@@ -92,7 +64,7 @@ func TestEnvoyAuthFailure(t *testing.T) {
 }
 
 func TestSystemJsonFailure(t *testing.T) {
-	registry = prometheus.NewRegistry()
+	handler := initPrometheus()
 	defer initEnvoyServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		if req.URL.String() == "/api/v1/production/inverters" {
 			rw.WriteHeader(http.StatusOK)
@@ -109,7 +81,6 @@ func TestSystemJsonFailure(t *testing.T) {
 	metrics()
 	//we need to allow the metrics to collect
 	time.Sleep(time.Duration(250) * time.Millisecond)
-	handler := initPrometheus()
 
 	data, err := getSystemJson()
 	log.Printf("Returned %s", data)
@@ -127,13 +98,42 @@ func TestSystemJsonFailure(t *testing.T) {
 	data, err = ioutil.ReadAll(res.Body)
 	checkErr(err)
 
-	if len(data) != 863 {
+	if len(data) != 1096 {
 		log.Println(string(data))
-		t.Errorf("data should be 863 characters long, is %d", len(data))
+		t.Errorf("data should be 1096 characters long, is %d", len(data))
+	}
+}
+
+func TestStreamsSuccess(t *testing.T) {
+	handler := initPrometheus()
+	defer initEnvoyServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+		if req.URL.String() == "/stream/meter" {
+			rw.WriteHeader(http.StatusOK)
+			fmt.Fprintf(rw, "data: {\"production\":{\"ph-a\":{\"p\":-0.0,\"q\":138.135,\"s\":139.586,\"v\":118.313,\"i\":1.18,\"pf\":0.0,\"f\":60.0},\"ph-b\":{\"p\":0.0,\"q\":137.861,\"s\":140.002,\"v\":118.371,\"i\":1.182,\"pf\":0.0,\"f\":60.0},\"ph-c\":{\"p\":0.0,\"q\":0.0,\"s\":0.0,\"v\":0.0,\"i\":0.0,\"pf\":0.0,\"f\":0.0}},\"net-consumption\":{\"ph-a\":{\"p\":0.0,\"q\":0.0,\"s\":17.442,\"v\":118.302,\"i\":0.147,\"pf\":0.0,\"f\":60.0},\"ph-b\":{\"p\":-0.0,\"q\":0.0,\"s\":16.803,\"v\":118.371,\"i\":0.141,\"pf\":0.0,\"f\":60.0},\"ph-c\":{\"p\":0.0,\"q\":0.0,\"s\":0.0,\"v\":0.0,\"i\":0.0,\"pf\":0.0,\"f\":0.0}},\"total-consumption\":{\"ph-a\":{\"p\":-0.0,\"q\":-138.135,\"s\":156.955,\"v\":118.307,\"i\":1.327,\"pf\":-0.0,\"f\":60.0},\"ph-b\":{\"p\":0.0,\"q\":-137.861,\"s\":123.278,\"v\":118.371,\"i\":1.041,\"pf\":0.0,\"f\":60.0},\"ph-c\":{\"p\":0.0,\"q\":0.0,\"s\":0.0,\"v\":0.0,\"i\":0.0,\"pf\":0.0,\"f\":0.0}}}\n\n")
+		}
+	})).Close()
+	streams()
+	time.Sleep(time.Duration(250) * time.Millisecond)
+
+	req := httptest.NewRequest("GET", "http://example.com/metrics", nil)
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, req)
+
+	res := w.Result()
+	defer res.Body.Close()
+
+	data, err := ioutil.ReadAll(res.Body)
+	checkErr(err)
+
+	if len(data) != 3944 {
+		log.Println(string(data))
+		t.Errorf("data should be 3944 characters long, is %d", len(data))
 	}
 }
 
 func initPrometheus() http.Handler {
+	registry = prometheus.NewRegistry()
 	return promhttp.HandlerFor(registry, promhttp.HandlerOpts{})
 }
 
@@ -141,6 +141,7 @@ func initEnvoyServer(handler http.HandlerFunc) *httptest.Server {
 	os.Setenv("USERNAME", "envoy")
 	os.Setenv("PASSWORD", "123456")
 	os.Setenv("SLEEP_SECONDS", "10")
+	os.Setenv("ARRAY_LAYOUT", "{\"system_id\":2335303,\"rotation\":0,\"dimensions\":{\"x_min\":30,\"x_max\":430,\"y_min\":0,\"y_max\":700},\"arrays\":[{\"array_id\":3871525,\"label\":\"array 1\",\"x\":230,\"y\":350,\"azimuth\":270,\"modules\":[{\"module_id\":48968985,\"rotation\":0,\"x\":300,\"y\":100,\"inverter\":{\"inverter_id\":51116942,\"serial_num\":\"482125061710\"}},{\"module_id\":48968986,\"rotation\":0,\"x\":200,\"y\":100,\"inverter\":{\"inverter_id\":51116946,\"serial_num\":\"482125061458\"}},{\"module_id\":48968987,\"rotation\":0,\"x\":100,\"y\":100,\"inverter\":{\"inverter_id\":51116938,\"serial_num\":\"482125062528\"}},{\"module_id\":48968988,\"rotation\":0,\"x\":0,\"y\":100,\"inverter\":{\"inverter_id\":51116956,\"serial_num\":\"482125062558\"}},{\"module_id\":48968989,\"rotation\":0,\"x\":-100,\"y\":100,\"inverter\":{\"inverter_id\":51116940,\"serial_num\":\"482125062554\"}},{\"module_id\":48968990,\"rotation\":0,\"x\":-200,\"y\":100,\"inverter\":{\"inverter_id\":51116933,\"serial_num\":\"202117037990\"}},{\"module_id\":48968991,\"rotation\":0,\"x\":-300,\"y\":100,\"inverter\":{\"inverter_id\":51116932,\"serial_num\":\"482125062686\"}},{\"module_id\":48968992,\"rotation\":0,\"x\":300,\"y\":-100,\"inverter\":{\"inverter_id\":51116950,\"serial_num\":\"482125061240\"}},{\"module_id\":48968993,\"rotation\":0,\"x\":200,\"y\":-100,\"inverter\":{\"inverter_id\":51116948,\"serial_num\":\"482125062610\"}},{\"module_id\":48968994,\"rotation\":0,\"x\":100,\"y\":-100,\"inverter\":{\"inverter_id\":51116952,\"serial_num\":\"482125061975\"}},{\"module_id\":48968995,\"rotation\":0,\"x\":0,\"y\":-100,\"inverter\":{\"inverter_id\":51116949,\"serial_num\":\"482125062650\"}},{\"module_id\":48968996,\"rotation\":0,\"x\":-100,\"y\":-100,\"inverter\":{\"inverter_id\":51116944,\"serial_num\":\"482125061455\"}},{\"module_id\":48968997,\"rotation\":0,\"x\":-200,\"y\":-100,\"inverter\":{\"inverter_id\":51116936,\"serial_num\":\"482125061677\"}},{\"module_id\":48968998,\"rotation\":0,\"x\":-300,\"y\":-100,\"inverter\":{\"inverter_id\":51116935,\"serial_num\":\"482125062378\"}}],\"dimensions\":{\"x_min\":30,\"x_max\":430,\"y_min\":0,\"y_max\":700},\"tilt\":20,\"array_type_name\":\"\",\"pcu_count\":14,\"pv_module_details\":{\"manufacturer\":\"SunSpark\",\"model\":\"SST-320M3B\",\"type\":null,\"power_rating\":null}}],\"haiku\":\"Put upon the roof I am waiting for the sun All I see is clouds\"}")
 
 	server := httptest.NewServer(handler)
 
