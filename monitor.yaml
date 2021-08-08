@@ -40,11 +40,11 @@ spec:
             port: http
         resources:
           limits:
-            cpu: 200m
-            memory: 200Mi
+            cpu: 20m
+            memory: 40Mi
           requests:
-            cpu: 100m
-            memory: 100Mi
+            cpu: 10m
+            memory: 20Mi
 ---
 apiVersion: v1
 kind: Service
