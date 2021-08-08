@@ -1,12 +1,14 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
+	"reflect"
 	"strconv"
 	"time"
 
@@ -20,12 +22,40 @@ var (
 	registry       *prometheus.Registry
 	reported_watts = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "reported_watts",
-		Help: "Watts reported by individual inverters.",
+		Help: "watts reported by individual inverters.",
 	}, []string{"serial_number"})
 	total_watts = promauto.NewGauge(prometheus.GaugeOpts{
 		Name: "total_watts",
-		Help: "Total watts reported by the system.",
+		Help: "total watts reported by the system.",
 	})
+	p = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "active_power",
+		Help: "active power reported by the meter, in watts.",
+	}, []string{"type", "phase"})
+	q = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "reactive_power",
+		Help: "reactive power reported by the meter, in watts.",
+	}, []string{"type", "phase"})
+	s = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "apparent_power",
+		Help: "apparent power reported by the meter, in watts.",
+	}, []string{"type", "phase"})
+	v = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "voltage",
+		Help: "voltage reported by the meter, in volts.",
+	}, []string{"type", "phase"})
+	i = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "amperage",
+		Help: "current reported by the meter, in amperes.",
+	}, []string{"type", "phase"})
+	pf = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "frequency",
+		Help: "frequency reported by the meter, in hertz.",
+	}, []string{"type", "phase"})
+	f = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "power_factor_ratio",
+		Help: "the power factor ratio of the meter.",
+	}, []string{"type", "phase"})
 )
 
 type inverter struct {
@@ -34,6 +64,22 @@ type inverter struct {
 	DevType         int    `json:"devType"`
 	LastReportWatts int    `json:"lastReportWatts"`
 	MaxReportWatts  int    `json:"maxReportWatts"`
+}
+
+type phase struct {
+	P  float64 `json:"p"`
+	Q  float64 `json:"q"`
+	S  float64 `json:"s"`
+	V  float64 `json:"v"`
+	I  float64 `json:"i"`
+	Pf float64 `json:"pf"`
+	F  float64 `json:"f"`
+}
+
+type threePhase struct {
+	PhA phase `json:"ph-a"`
+	PhB phase `json:"ph-b"`
+	PhC phase `json:"ph-c"`
 }
 
 func getInverterJson() ([]byte, error) {
@@ -70,9 +116,66 @@ func getSystemJson() ([]byte, error) {
 	return body, nil
 }
 
+func streams() {
+	log.Println("Initializing stream.")
+	registry.MustRegister(p)
+	registry.MustRegister(q)
+	registry.MustRegister(s)
+	registry.MustRegister(v)
+	registry.MustRegister(i)
+	registry.MustRegister(pf)
+	registry.MustRegister(f)
+
+	var gauges []*prometheus.GaugeVec = []*prometheus.GaugeVec{p, q, s, v, i, pf, f}
+
+	go func() {
+		t := dac.NewTransport(os.Getenv("USERNAME"), os.Getenv("PASSWORD"))
+		retries := 1
+		for {
+			log.Println("Reading from stream.")
+			req, err := http.NewRequest("GET", os.Getenv("ENVOY_URL")+"/stream/meter", nil)
+			checkErr(err)
+			resp, err := t.RoundTrip(req)
+			if err == nil {
+				retries = 1
+				reader := bufio.NewReader(resp.Body)
+				var stream map[string]threePhase
+				for {
+					line, err := reader.ReadBytes('\n')
+					if len(line) > 2 {
+						line = line[6:]
+						checkErr(err)
+						json.Unmarshal(line, &stream)
+
+						for phaseType := range stream {
+							for i, gauge := range gauges {
+								vA := reflect.ValueOf(stream[phaseType].PhA)
+								(*gauge).With(prometheus.Labels{"type": phaseType, "phase": "ph-a"}).Set(vA.Field(i).Interface().(float64))
+
+								vB := reflect.ValueOf(stream[phaseType].PhB)
+								(*gauge).With(prometheus.Labels{"type": phaseType, "phase": "ph-b"}).Set(vB.Field(i).Interface().(float64))
+
+								vC := reflect.ValueOf(stream[phaseType].PhC)
+								(*gauge).With(prometheus.Labels{"type": phaseType, "phase": "ph-c"}).Set(vC.Field(i).Interface().(float64))
+							}
+						}
+					}
+				}
+			} else {
+				log.Println("Error reading from stream.")
+				log.Println(err.Error())
+				retries *= 2
+				time.Sleep(time.Duration(retries) * 100 * time.Millisecond)
+				if retries > 300 {
+					retries = 300
+				}
+			}
+		}
+	}()
+}
+
 func metrics() {
 	log.Println("Initializing metrics.")
-	registry = prometheus.NewRegistry()
 	registry.MustRegister(total_watts)
 	registry.MustRegister(reported_watts)
 
@@ -115,7 +218,9 @@ func metrics() {
 }
 
 func main() {
+	registry = prometheus.NewRegistry()
 	metrics()
+	streams()
 	http.Handle("/metrics", promhttp.HandlerFor(registry, promhttp.HandlerOpts{}))
 	http.ListenAndServe(":80", nil)
 	log.Println("Server ready to serve.")

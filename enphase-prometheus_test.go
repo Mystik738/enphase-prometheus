@@ -10,10 +10,40 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
+func TestStreamsSuccess(t *testing.T) {
+	registry = prometheus.NewRegistry()
+	defer initEnvoyServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+		if req.URL.String() == "/stream/meter" {
+			rw.WriteHeader(http.StatusOK)
+			fmt.Fprintf(rw, "data: {\"production\":{\"ph-a\":{\"p\":-0.0,\"q\":138.135,\"s\":139.586,\"v\":118.313,\"i\":1.18,\"pf\":0.0,\"f\":60.0},\"ph-b\":{\"p\":0.0,\"q\":137.861,\"s\":140.002,\"v\":118.371,\"i\":1.182,\"pf\":0.0,\"f\":60.0},\"ph-c\":{\"p\":0.0,\"q\":0.0,\"s\":0.0,\"v\":0.0,\"i\":0.0,\"pf\":0.0,\"f\":0.0}},\"net-consumption\":{\"ph-a\":{\"p\":0.0,\"q\":0.0,\"s\":17.442,\"v\":118.302,\"i\":0.147,\"pf\":0.0,\"f\":60.0},\"ph-b\":{\"p\":-0.0,\"q\":0.0,\"s\":16.803,\"v\":118.371,\"i\":0.141,\"pf\":0.0,\"f\":60.0},\"ph-c\":{\"p\":0.0,\"q\":0.0,\"s\":0.0,\"v\":0.0,\"i\":0.0,\"pf\":0.0,\"f\":0.0}},\"total-consumption\":{\"ph-a\":{\"p\":-0.0,\"q\":-138.135,\"s\":156.955,\"v\":118.307,\"i\":1.327,\"pf\":-0.0,\"f\":60.0},\"ph-b\":{\"p\":0.0,\"q\":-137.861,\"s\":123.278,\"v\":118.371,\"i\":1.041,\"pf\":0.0,\"f\":60.0},\"ph-c\":{\"p\":0.0,\"q\":0.0,\"s\":0.0,\"v\":0.0,\"i\":0.0,\"pf\":0.0,\"f\":0.0}}}\n\n")
+		}
+	})).Close()
+	streams()
+	time.Sleep(time.Duration(250) * time.Millisecond)
+	handler := initPrometheus()
+	req := httptest.NewRequest("GET", "http://example.com/metrics", nil)
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, req)
+
+	res := w.Result()
+	defer res.Body.Close()
+
+	data, err := ioutil.ReadAll(res.Body)
+	checkErr(err)
+
+	if len(data) != 864 {
+		log.Println(string(data))
+		t.Errorf("data should be 864 characters long, is %d", len(data))
+	}
+}
+
 func TestMetricsSuccess(t *testing.T) {
+	registry = prometheus.NewRegistry()
 	defer initEnvoyServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		if req.URL.String() == "/api/v1/production/inverters" {
 			rw.WriteHeader(http.StatusOK)
@@ -62,6 +92,7 @@ func TestEnvoyAuthFailure(t *testing.T) {
 }
 
 func TestSystemJsonFailure(t *testing.T) {
+	registry = prometheus.NewRegistry()
 	defer initEnvoyServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		if req.URL.String() == "/api/v1/production/inverters" {
 			rw.WriteHeader(http.StatusOK)
@@ -69,6 +100,10 @@ func TestSystemJsonFailure(t *testing.T) {
 		}
 		if req.URL.String() == "/production.json" {
 			rw.WriteHeader(http.StatusInternalServerError)
+		}
+		if req.URL.String() == "/stream/meter" {
+			rw.WriteHeader(http.StatusOK)
+			fmt.Fprintf(rw, "data: {\"production\":{\"ph-a\":{\"p\":-0.0,\"q\":138.135,\"s\":139.586,\"v\":118.313,\"i\":1.18,\"pf\":0.0,\"f\":60.0},\"ph-b\":{\"p\":0.0,\"q\":137.861,\"s\":140.002,\"v\":118.371,\"i\":1.182,\"pf\":0.0,\"f\":60.0},\"ph-c\":{\"p\":0.0,\"q\":0.0,\"s\":0.0,\"v\":0.0,\"i\":0.0,\"pf\":0.0,\"f\":0.0}},\"net-consumption\":{\"ph-a\":{\"p\":0.0,\"q\":0.0,\"s\":17.442,\"v\":118.302,\"i\":0.147,\"pf\":0.0,\"f\":60.0},\"ph-b\":{\"p\":-0.0,\"q\":0.0,\"s\":16.803,\"v\":118.371,\"i\":0.141,\"pf\":0.0,\"f\":60.0},\"ph-c\":{\"p\":0.0,\"q\":0.0,\"s\":0.0,\"v\":0.0,\"i\":0.0,\"pf\":0.0,\"f\":0.0}},\"total-consumption\":{\"ph-a\":{\"p\":-0.0,\"q\":-138.135,\"s\":156.955,\"v\":118.307,\"i\":1.327,\"pf\":-0.0,\"f\":60.0},\"ph-b\":{\"p\":0.0,\"q\":-137.861,\"s\":123.278,\"v\":118.371,\"i\":1.041,\"pf\":0.0,\"f\":60.0},\"ph-c\":{\"p\":0.0,\"q\":0.0,\"s\":0.0,\"v\":0.0,\"i\":0.0,\"pf\":0.0,\"f\":0.0}}}")
 		}
 	})).Close()
 	metrics()

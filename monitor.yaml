@@ -29,7 +29,7 @@ spec:
             secretKeyRef:
               name: envoy-credentials
               key: password
-        image: mystik738/enphase-prometheus
+        image: mystik738/enphase-prometheus:0.2
         name: enphase-prometheus
         ports:
         - containerPort: 80
