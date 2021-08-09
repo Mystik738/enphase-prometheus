@@ -21,14 +21,18 @@ import (
 var (
 	arrayLocations map[string]geo
 
-	registry       *prometheus.Registry
-	reported_watts = promauto.NewGaugeVec(prometheus.GaugeOpts{
+	registry      *prometheus.Registry
+	reportedWatts = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "reported_watts",
 		Help: "watts reported by individual inverters.",
 	}, []string{"serial_number", "x", "y"})
-	total_watts = promauto.NewGauge(prometheus.GaugeOpts{
+	totalWatts = promauto.NewGauge(prometheus.GaugeOpts{
 		Name: "total_watts",
 		Help: "total watts reported by the system.",
+	})
+	wattHoursToday = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "watt_hours_today",
+		Help: "total watt hours today",
 	})
 	p = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "active_power",
@@ -255,8 +259,9 @@ func metrics() {
 			}
 		}
 	}
-	registry.MustRegister(reported_watts)
-	registry.MustRegister(total_watts)
+	registry.MustRegister(reportedWatts)
+	registry.MustRegister(totalWatts)
+	registry.MustRegister(wattHoursToday)
 
 	go func() {
 		for {
@@ -269,9 +274,9 @@ func metrics() {
 
 			for _, inverter := range inverters {
 				if val, ok := arrayLocations[inverter.SerialNumber]; ok {
-					reported_watts.With(prometheus.Labels{"serial_number": inverter.SerialNumber, "x": strconv.Itoa(val.X), "y": strconv.Itoa(val.Y)}).Set(float64(inverter.LastReportWatts))
+					reportedWatts.With(prometheus.Labels{"serial_number": inverter.SerialNumber, "x": strconv.Itoa(val.X), "y": strconv.Itoa(val.Y)}).Set(float64(inverter.LastReportWatts))
 				} else {
-					reported_watts.With(prometheus.Labels{"serial_number": inverter.SerialNumber, "x": "0", "y": "0"}).Set(float64(inverter.LastReportWatts))
+					reportedWatts.With(prometheus.Labels{"serial_number": inverter.SerialNumber, "x": "0", "y": "0"}).Set(float64(inverter.LastReportWatts))
 				}
 			}
 
@@ -280,13 +285,11 @@ func metrics() {
 				var system production
 				json.Unmarshal(systemJSON, &system)
 
-				//Some whacky conversion here, but simpler than defining the whole json object
-				totalWattage := system.WattsNow
-
-				log.Println("Received system data, current total watts is", totalWattage)
-				total_watts.Set(float64(totalWattage))
+				log.Println("Received system data, current total watts is", system.WattsNow)
+				totalWatts.Set(float64(system.WattsNow))
+				wattHoursToday.Set(float64(system.WattHoursToday))
 			} else {
-				total_watts.Set(float64(0))
+				totalWatts.Set(float64(0))
 				log.Println("Error retrieving system data.")
 			}
 
