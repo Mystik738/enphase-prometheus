@@ -60,6 +60,13 @@ var (
 	}, []string{"type", "phase"})
 )
 
+type production struct {
+	WattHoursToday     int `json:"wattHoursToday"`
+	WattHoursSevenDays int `json:"wattHoursSevenDays"`
+	WattHoursLifetime  int `json:"wattHoursLifetime"`
+	WattsNow           int `json:"wattsNow"`
+}
+
 type inverter struct {
 	SerialNumber    string `json:"serialNumber"`
 	LastReportDate  int    `json:"lastReportDate"`
@@ -153,8 +160,8 @@ func getInverterJSON() ([]byte, error) {
 }
 
 func getSystemJSON() ([]byte, error) {
-	log.Println("Getting system json from " + os.Getenv("ENVOY_URL") + "/production.json")
-	resp, err := http.Get(os.Getenv("ENVOY_URL") + "/production.json")
+	log.Println("Getting system json from " + os.Getenv("ENVOY_URL") + "/api/v1/production")
+	resp, err := http.Get(os.Getenv("ENVOY_URL") + "/api/v1/production")
 	checkErr(err)
 	if resp.StatusCode != http.StatusOK {
 		return []byte("[]"), fmt.Errorf("received http status %d", resp.StatusCode)
@@ -270,11 +277,11 @@ func metrics() {
 
 			systemJSON, err := getSystemJSON()
 			if err == nil {
-				var system map[string]interface{}
+				var system production
 				json.Unmarshal(systemJSON, &system)
 
 				//Some whacky conversion here, but simpler than defining the whole json object
-				totalWattage := int(system["production"].([]interface{})[0].(map[string]interface{})["wNow"].(float64))
+				totalWattage := system.WattsNow
 
 				log.Println("Received system data, current total watts is", totalWattage)
 				total_watts.Set(float64(totalWattage))
@@ -294,10 +301,9 @@ func metrics() {
 }
 
 func main() {
-	handler := initPrometheus()
+	http.Handle("/metrics", initPrometheus())
 	metrics()
 	streams()
-	http.Handle("/metrics", handler)
 	port := "80"
 	if os.Getenv("PORT") != "" {
 		port = os.Getenv("PORT")
