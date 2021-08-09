@@ -39,7 +39,7 @@ func TestEnvoyAuthFailure(t *testing.T) {
 	})).Close()
 	os.Setenv("PASSWORD", "12345")
 
-	data, err := getInverterJson()
+	data, err := getInverterJSON()
 	log.Printf("Returned %s", data)
 	if err == nil {
 		t.Errorf("expected error to not be nil")
@@ -65,7 +65,7 @@ func TestSystemJsonFailure(t *testing.T) {
 	//we need to allow the metrics to collect
 	time.Sleep(time.Duration(250) * time.Millisecond)
 
-	data, err := getSystemJson()
+	data, err := getSystemJSON()
 	log.Printf("Returned %s", data)
 	if err == nil {
 		t.Errorf("expected error to not be nil")

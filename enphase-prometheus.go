@@ -134,7 +134,7 @@ type threePhase struct {
 	PhC phase `json:"ph-c"`
 }
 
-func getInverterJson() ([]byte, error) {
+func getInverterJSON() ([]byte, error) {
 	log.Println("Getting system json from " + os.Getenv("ENVOY_URL") + "/api/v1/production/inverters")
 	t := dac.NewTransport(os.Getenv("USERNAME"), os.Getenv("PASSWORD"))
 	req, err := http.NewRequest("GET", os.Getenv("ENVOY_URL")+"/api/v1/production/inverters", nil)
@@ -152,7 +152,7 @@ func getInverterJson() ([]byte, error) {
 	return body, nil
 }
 
-func getSystemJson() ([]byte, error) {
+func getSystemJSON() ([]byte, error) {
 	log.Println("Getting system json from " + os.Getenv("ENVOY_URL") + "/production.json")
 	resp, err := http.Get(os.Getenv("ENVOY_URL") + "/production.json")
 	checkErr(err)
@@ -247,18 +247,16 @@ func metrics() {
 				}
 			}
 		}
-
-		registry.Register(reported_watts)
 	}
-	registry.Register(reported_watts)
+	registry.MustRegister(reported_watts)
 	registry.MustRegister(total_watts)
 
 	go func() {
 		for {
 			log.Println("Retrieving metrics.")
-			inverterJson, _ := getInverterJson()
+			inverterJSON, _ := getInverterJSON()
 			var inverters []inverter
-			json.Unmarshal(inverterJson, &inverters)
+			json.Unmarshal(inverterJSON, &inverters)
 
 			log.Println("Received data from", len(inverters), "inverters.")
 
@@ -270,10 +268,10 @@ func metrics() {
 				}
 			}
 
-			systemJson, err := getSystemJson()
+			systemJSON, err := getSystemJSON()
 			if err == nil {
 				var system map[string]interface{}
-				json.Unmarshal(systemJson, &system)
+				json.Unmarshal(systemJSON, &system)
 
 				//Some whacky conversion here, but simpler than defining the whole json object
 				totalWattage := int(system["production"].([]interface{})[0].(map[string]interface{})["wNow"].(float64))
