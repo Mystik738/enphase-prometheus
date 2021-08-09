@@ -296,11 +296,15 @@ func metrics() {
 }
 
 func main() {
-	registry = prometheus.NewRegistry()
+	handler := initPrometheus()
 	metrics()
 	streams()
-	http.Handle("/metrics", promhttp.HandlerFor(registry, promhttp.HandlerOpts{}))
-	err := http.ListenAndServe(":80", nil)
+	http.Handle("/metrics", handler)
+	port := "80"
+	if os.Getenv("PORT") != "" {
+		port = os.Getenv("PORT")
+	}
+	err := http.ListenAndServe(":"+port, nil)
 	checkErr(err)
 	log.Println("Server ready to serve.")
 }
@@ -310,4 +314,9 @@ func checkErr(err error) {
 		log.Println(err.Error())
 		os.Exit(1)
 	}
+}
+
+func initPrometheus() http.Handler {
+	registry = prometheus.NewRegistry()
+	return promhttp.HandlerFor(registry, promhttp.HandlerOpts{})
 }

@@ -9,9 +9,6 @@ import (
 	"os"
 	"testing"
 	"time"
-
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func TestMetricsSuccess(t *testing.T) {
@@ -30,21 +27,7 @@ func TestMetricsSuccess(t *testing.T) {
 	//we need to allow the metrics to collect
 	time.Sleep(time.Duration(250) * time.Millisecond)
 
-	req := httptest.NewRequest("GET", "http://example.com/metrics", nil)
-	w := httptest.NewRecorder()
-
-	handler.ServeHTTP(w, req)
-
-	res := w.Result()
-	defer res.Body.Close()
-
-	data, err := ioutil.ReadAll(res.Body)
-	checkErr(err)
-
-	if len(data) != 1097 {
-		log.Println(string(data))
-		t.Errorf("data should be 1097 characters long, is %d", len(data))
-	}
+	getMetrics(t, handler, 1097)
 }
 
 func TestEnvoyAuthFailure(t *testing.T) {
@@ -87,21 +70,7 @@ func TestSystemJsonFailure(t *testing.T) {
 	if err == nil {
 		t.Errorf("expected error to not be nil")
 	}
-	req := httptest.NewRequest("GET", "http://example.com/metrics", nil)
-	w := httptest.NewRecorder()
-
-	handler.ServeHTTP(w, req)
-
-	res := w.Result()
-	defer res.Body.Close()
-
-	data, err = ioutil.ReadAll(res.Body)
-	checkErr(err)
-
-	if len(data) != 1096 {
-		log.Println(string(data))
-		t.Errorf("data should be 1096 characters long, is %d", len(data))
-	}
+	getMetrics(t, handler, 1096)
 }
 
 func TestStreamsSuccess(t *testing.T) {
@@ -113,7 +82,12 @@ func TestStreamsSuccess(t *testing.T) {
 		}
 	})).Close()
 	streams()
+
 	time.Sleep(time.Duration(250) * time.Millisecond)
+	getMetrics(t, handler, 3944)
+}
+
+func getMetrics(t *testing.T, handler http.Handler, length int) {
 
 	req := httptest.NewRequest("GET", "http://example.com/metrics", nil)
 	w := httptest.NewRecorder()
@@ -126,15 +100,10 @@ func TestStreamsSuccess(t *testing.T) {
 	data, err := ioutil.ReadAll(res.Body)
 	checkErr(err)
 
-	if len(data) != 3944 {
+	if len(data) != length {
 		log.Println(string(data))
-		t.Errorf("data should be 3944 characters long, is %d", len(data))
+		t.Errorf("data should be %d characters long, is %d", length, len(data))
 	}
-}
-
-func initPrometheus() http.Handler {
-	registry = prometheus.NewRegistry()
-	return promhttp.HandlerFor(registry, promhttp.HandlerOpts{})
 }
 
 func initEnvoyServer(handler http.HandlerFunc) *httptest.Server {
