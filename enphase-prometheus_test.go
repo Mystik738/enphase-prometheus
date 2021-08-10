@@ -31,7 +31,7 @@ func TestMetricsSuccess(t *testing.T) {
 	//we need to allow the metrics to collect
 	time.Sleep(time.Duration(250) * time.Millisecond)
 
-	getMetrics(t, handler, 1196)
+	getMetrics(t, handler, 1462)
 }
 
 func TestEnvoyAuthFailure(t *testing.T) {
@@ -77,7 +77,7 @@ func TestSystemJsonFailure(t *testing.T) {
 	if err == nil {
 		t.Errorf("expected error to not be nil")
 	}
-	getMetrics(t, handler, 1192)
+	getMetrics(t, handler, 1461)
 }
 
 func TestStreamsSuccess(t *testing.T) {

@@ -34,6 +34,14 @@ var (
 		Name: "watt_hours_today",
 		Help: "total watt hours today",
 	})
+	wattHoursSevenDays = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "watt_hours_seven_days",
+		Help: "total watt hours past seven days",
+	})
+	wattHoursLifetime = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "watt_hours_lifetime",
+		Help: "watt hours produced over the lifetime of this device",
+	})
 	p = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "active_power",
 		Help: "active power reported by the meter, in watts.",
@@ -262,6 +270,8 @@ func metrics() {
 	registry.MustRegister(reportedWatts)
 	registry.MustRegister(totalWatts)
 	registry.MustRegister(wattHoursToday)
+	registry.MustRegister(wattHoursSevenDays)
+	registry.MustRegister(wattHoursLifetime)
 
 	go func() {
 		for {
@@ -287,6 +297,8 @@ func metrics() {
 
 				log.Println("Received system data, current total watts is", system.WattsNow)
 				totalWatts.Set(float64(system.WattsNow))
+				wattHoursSevenDays.Set(float64(system.WattHoursSevenDays))
+				wattHoursLifetime.Set(float64(system.WattHoursLifetime))
 				wattHoursToday.Set(float64(system.WattHoursToday))
 			} else {
 				totalWatts.Set(float64(0))
