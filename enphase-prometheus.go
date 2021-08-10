@@ -54,11 +54,11 @@ var (
 		Name: "amperage",
 		Help: "current reported by the meter, in amperes.",
 	}, []string{"type", "phase"})
-	pf = promauto.NewGaugeVec(prometheus.GaugeOpts{
+	f = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "frequency",
 		Help: "frequency reported by the meter, in hertz.",
 	}, []string{"type", "phase"})
-	f = promauto.NewGaugeVec(prometheus.GaugeOpts{
+	pf = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "power_factor_ratio",
 		Help: "the power factor ratio of the meter.",
 	}, []string{"type", "phase"})
