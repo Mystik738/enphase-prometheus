@@ -155,7 +155,7 @@ type threePhase struct {
 
 func getInverterJSON() ([]byte, error) {
 	log.Println("Getting system json from " + os.Getenv("ENVOY_URL") + "/api/v1/production/inverters")
-	t := dac.NewTransport(os.Getenv("USERNAME"), os.Getenv("PASSWORD"))
+	t := dac.NewTransport(os.Getenv("ENVOY_USERNAME"), os.Getenv("PASSWORD"))
 	req, err := http.NewRequest("GET", os.Getenv("ENVOY_URL")+"/api/v1/production/inverters", nil)
 	checkErr(err)
 	resp, err := t.RoundTrip(req)
@@ -200,7 +200,7 @@ func streams() {
 	var gauges []*prometheus.GaugeVec = []*prometheus.GaugeVec{p, q, s, v, i, pf, f}
 
 	go func() {
-		t := dac.NewTransport(os.Getenv("USERNAME"), os.Getenv("PASSWORD"))
+		t := dac.NewTransport(os.Getenv("ENVOY_USERNAME"), os.Getenv("PASSWORD"))
 		t.HTTPClient = &http.Client{
 			Timeout: time.Second * 3600,
 		}

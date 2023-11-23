@@ -2,3 +2,4 @@ debug.test
 vendor
 *.test
 enphase-prometheus
+.DS_Store
