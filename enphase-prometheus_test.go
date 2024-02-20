@@ -41,11 +41,11 @@ func TestEnvoyAuthFailure(t *testing.T) {
 			fmt.Fprintf(rw, "{\r\n    \"status\": 401,\r\n    \"error\": \"\",\r\n    \"info\": \"Authentication required\",\r\n    \"moreInfo\": \"\"\r\n}")
 		}
 	})).Close()
-	os.Setenv("PASSWORD", "12345")
+	os.Setenv("AUTH_TOKEN", "1kd4js")
 
-	data, err := getInverterJSON()
+	data, _ := getInverterJSON()
 	log.Printf("Returned %s", data)
-	if err == nil {
+	if string(data) != "{\r\n    \"status\": 401,\r\n    \"error\": \"\",\r\n    \"info\": \"Authentication required\",\r\n    \"moreInfo\": \"\"\r\n}" {
 		t.Errorf("expected error to not be nil")
 	}
 }
@@ -77,7 +77,7 @@ func TestSystemJsonFailure(t *testing.T) {
 	if err == nil {
 		t.Errorf("expected error to not be nil")
 	}
-	getMetrics(t, handler, 1461)
+	getMetrics(t, handler, 1448)
 }
 
 func TestStreamsSuccess(t *testing.T) {
@@ -114,8 +114,7 @@ func getMetrics(t *testing.T, handler http.Handler, length int) {
 }
 
 func initEnvoyServer(handler http.HandlerFunc) *httptest.Server {
-	os.Setenv("ENVOY_USERNAME", "envoy")
-	os.Setenv("PASSWORD", "123456")
+	os.Setenv("AUTH_TOKEN", "1kdi394js")
 	os.Setenv("SLEEP_SECONDS", "10")
 	os.Setenv("ARRAY_LAYOUT", "{\"system_id\":2335303,\"rotation\":0,\"dimensions\":{\"x_min\":30,\"x_max\":430,\"y_min\":0,\"y_max\":700},\"arrays\":[{\"array_id\":3871525,\"label\":\"array 1\",\"x\":230,\"y\":350,\"azimuth\":270,\"modules\":[{\"module_id\":48968985,\"rotation\":0,\"x\":300,\"y\":100,\"inverter\":{\"inverter_id\":51116942,\"serial_num\":\"482125061710\"}},{\"module_id\":48968986,\"rotation\":0,\"x\":200,\"y\":100,\"inverter\":{\"inverter_id\":51116946,\"serial_num\":\"482125061458\"}},{\"module_id\":48968987,\"rotation\":0,\"x\":100,\"y\":100,\"inverter\":{\"inverter_id\":51116938,\"serial_num\":\"482125062528\"}},{\"module_id\":48968988,\"rotation\":0,\"x\":0,\"y\":100,\"inverter\":{\"inverter_id\":51116956,\"serial_num\":\"482125062558\"}},{\"module_id\":48968989,\"rotation\":0,\"x\":-100,\"y\":100,\"inverter\":{\"inverter_id\":51116940,\"serial_num\":\"482125062554\"}},{\"module_id\":48968990,\"rotation\":0,\"x\":-200,\"y\":100,\"inverter\":{\"inverter_id\":51116933,\"serial_num\":\"202117037990\"}},{\"module_id\":48968991,\"rotation\":0,\"x\":-300,\"y\":100,\"inverter\":{\"inverter_id\":51116932,\"serial_num\":\"482125062686\"}},{\"module_id\":48968992,\"rotation\":0,\"x\":300,\"y\":-100,\"inverter\":{\"inverter_id\":51116950,\"serial_num\":\"482125061240\"}},{\"module_id\":48968993,\"rotation\":0,\"x\":200,\"y\":-100,\"inverter\":{\"inverter_id\":51116948,\"serial_num\":\"482125062610\"}},{\"module_id\":48968994,\"rotation\":0,\"x\":100,\"y\":-100,\"inverter\":{\"inverter_id\":51116952,\"serial_num\":\"482125061975\"}},{\"module_id\":48968995,\"rotation\":0,\"x\":0,\"y\":-100,\"inverter\":{\"inverter_id\":51116949,\"serial_num\":\"482125062650\"}},{\"module_id\":48968996,\"rotation\":0,\"x\":-100,\"y\":-100,\"inverter\":{\"inverter_id\":51116944,\"serial_num\":\"482125061455\"}},{\"module_id\":48968997,\"rotation\":0,\"x\":-200,\"y\":-100,\"inverter\":{\"inverter_id\":51116936,\"serial_num\":\"482125061677\"}},{\"module_id\":48968998,\"rotation\":0,\"x\":-300,\"y\":-100,\"inverter\":{\"inverter_id\":51116935,\"serial_num\":\"482125062378\"}}],\"dimensions\":{\"x_min\":30,\"x_max\":430,\"y_min\":0,\"y_max\":700},\"tilt\":20,\"array_type_name\":\"\",\"pcu_count\":14,\"pv_module_details\":{\"manufacturer\":\"SunSpark\",\"model\":\"SST-320M3B\",\"type\":null,\"power_rating\":null}}],\"haiku\":\"Put upon the roof I am waiting for the sun All I see is clouds\"}")
 

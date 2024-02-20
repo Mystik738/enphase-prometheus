@@ -2,9 +2,10 @@ package main
 
 import (
 	"bufio"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -15,7 +16,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	dac "github.com/xinsnake/go-http-digest-auth-client"
 )
 
 var (
@@ -87,7 +87,7 @@ type inverter struct {
 	MaxReportWatts  int    `json:"maxReportWatts"`
 }
 
-//Generated with https://mholt.github.io/json-to-go/
+// Generated with https://mholt.github.io/json-to-go/
 type arrayLayout struct {
 	SystemID   int `json:"system_id"`
 	Rotation   int `json:"rotation"`
@@ -155,17 +155,20 @@ type threePhase struct {
 
 func getInverterJSON() ([]byte, error) {
 	log.Println("Getting system json from " + os.Getenv("ENVOY_URL") + "/api/v1/production/inverters")
-	t := dac.NewTransport(os.Getenv("ENVOY_USERNAME"), os.Getenv("PASSWORD"))
-	req, err := http.NewRequest("GET", os.Getenv("ENVOY_URL")+"/api/v1/production/inverters", nil)
-	checkErr(err)
-	resp, err := t.RoundTrip(req)
+	client := &http.Client{
+		Timeout: time.Second * 3600,
+		Transport: &bearerAuthTransport{
+			Token: os.Getenv("AUTH_TOKEN"),
+		},
+	}
+	resp, err := client.Get(os.Getenv("ENVOY_URL") + "/api/v1/production/inverters")
 	if err != nil {
 		return []byte("[]"), err
 	}
 
 	defer resp.Body.Close()
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	checkErr(err)
 
 	return body, nil
@@ -173,7 +176,13 @@ func getInverterJSON() ([]byte, error) {
 
 func getSystemJSON() ([]byte, error) {
 	log.Println("Getting system json from " + os.Getenv("ENVOY_URL") + "/api/v1/production")
-	resp, err := http.Get(os.Getenv("ENVOY_URL") + "/api/v1/production")
+	client := &http.Client{
+		Timeout: time.Second * 3600,
+		Transport: &bearerAuthTransport{
+			Token: os.Getenv("AUTH_TOKEN"),
+		},
+	}
+	resp, err := client.Get(os.Getenv("ENVOY_URL") + "/api/v1/production")
 	checkErr(err)
 	if resp.StatusCode != http.StatusOK {
 		return []byte("[]"), fmt.Errorf("received http status %d", resp.StatusCode)
@@ -181,7 +190,7 @@ func getSystemJSON() ([]byte, error) {
 
 	defer resp.Body.Close()
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	checkErr(err)
 
 	return body, nil
@@ -200,16 +209,16 @@ func streams() {
 	var gauges []*prometheus.GaugeVec = []*prometheus.GaugeVec{p, q, s, v, i, pf, f}
 
 	go func() {
-		t := dac.NewTransport(os.Getenv("ENVOY_USERNAME"), os.Getenv("PASSWORD"))
-		t.HTTPClient = &http.Client{
+		client := &http.Client{
 			Timeout: time.Second * 3600,
+			Transport: &bearerAuthTransport{
+				Token: os.Getenv("AUTH_TOKEN"),
+			},
 		}
 		retries := 1
 		for {
 			log.Println("Reading from stream.")
-			req, err := http.NewRequest("GET", os.Getenv("ENVOY_URL")+"/stream/meter", nil)
-			checkErr(err)
-			resp, err := t.RoundTrip(req)
+			resp, err := client.Get(os.Getenv("ENVOY_URL") + "/stream/meter")
 			if err == nil {
 				retries = 1
 				reader := bufio.NewReader(resp.Body)
@@ -316,6 +325,7 @@ func metrics() {
 }
 
 func main() {
+	http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 	http.Handle("/metrics", initPrometheus())
 	metrics()
 	streams()
@@ -338,4 +348,15 @@ func checkErr(err error) {
 func initPrometheus() http.Handler {
 	registry = prometheus.NewRegistry()
 	return promhttp.HandlerFor(registry, promhttp.HandlerOpts{})
+}
+
+// bearerAuthTransport adds the Authorization header to requests
+type bearerAuthTransport struct {
+	Token string
+}
+
+// RoundTrip executes a single HTTP transaction and adds the Authorization header
+func (bat *bearerAuthTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	req.Header.Add("Authorization", "Bearer "+bat.Token)
+	return http.DefaultTransport.RoundTrip(req)
 }
