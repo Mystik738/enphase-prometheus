@@ -72,13 +72,6 @@ var (
 	}, []string{"type", "phase"})
 )
 
-type production struct {
-	WattHoursToday     int `json:"wattHoursToday"`
-	WattHoursSevenDays int `json:"wattHoursSevenDays"`
-	WattHoursLifetime  int `json:"wattHoursLifetime"`
-	WattsNow           int `json:"wattsNow"`
-}
-
 type inverter struct {
 	SerialNumber    string `json:"serialNumber"`
 	LastReportDate  int    `json:"lastReportDate"`
@@ -88,6 +81,43 @@ type inverter struct {
 }
 
 // Generated with https://mholt.github.io/json-to-go/
+type production struct {
+	Production  []Telemetry `json:"production"`
+	Consumption []Telemetry `json:"consumption"`
+	Storage     []Storage   `json:"storage"`
+}
+
+type Telemetry struct {
+	Type             string  `json:"type"`
+	ActiveCount      int     `json:"activeCount"`
+	ReadingTime      int     `json:"readingTime"`
+	WNow             int     `json:"wNow"`
+	WhLifetime       int     `json:"whLifetime"`
+	MeasurementType  string  `json:"measurementType,omitempty"`
+	VarhLeadLifetime int     `json:"varhLeadLifetime,omitempty"`
+	VarhLagLifetime  int     `json:"varhLagLifetime,omitempty"`
+	VahLifetime      int     `json:"vahLifetime,omitempty"`
+	RmsCurrent       float64 `json:"rmsCurrent,omitempty"`
+	RmsVoltage       float64 `json:"rmsVoltage,omitempty"`
+	ReactPwr         float64 `json:"reactPwr,omitempty"`
+	ApprntPwr        float64 `json:"apprntPwr,omitempty"`
+	PwrFactor        int     `json:"pwrFactor,omitempty"`
+	WhToday          int     `json:"whToday,omitempty"`
+	WhLastSevenDays  int     `json:"whLastSevenDays,omitempty"`
+	VahToday         int     `json:"vahToday,omitempty"`
+	VarhLeadToday    int     `json:"varhLeadToday,omitempty"`
+	VarhLagToday     int     `json:"varhLagToday,omitempty"`
+}
+
+type Storage struct {
+	Type        string `json:"type"`
+	ActiveCount int    `json:"activeCount"`
+	ReadingTime int    `json:"readingTime"`
+	WNow        int    `json:"wNow"`
+	WhNow       int    `json:"whNow"`
+	State       string `json:"state"`
+}
+
 type arrayLayout struct {
 	SystemID   int `json:"system_id"`
 	Rotation   int `json:"rotation"`
@@ -175,14 +205,14 @@ func getInverterJSON() ([]byte, error) {
 }
 
 func getSystemJSON() ([]byte, error) {
-	log.Println("Getting system json from " + os.Getenv("ENVOY_URL") + "/api/v1/production")
+	log.Println("Getting system json from " + os.Getenv("ENVOY_URL") + "/production.json")
 	client := &http.Client{
 		Timeout: time.Second * 3600,
 		Transport: &bearerAuthTransport{
 			Token: os.Getenv("AUTH_TOKEN"),
 		},
 	}
-	resp, err := client.Get(os.Getenv("ENVOY_URL") + "/api/v1/production")
+	resp, err := client.Get(os.Getenv("ENVOY_URL") + "/production.json")
 	checkErr(err)
 	if resp.StatusCode != http.StatusOK {
 		return []byte("[]"), fmt.Errorf("received http status %d", resp.StatusCode)
@@ -278,8 +308,6 @@ func metrics() {
 	}
 	registry.MustRegister(reportedWatts)
 	registry.MustRegister(totalWatts)
-	registry.MustRegister(wattHoursToday)
-	registry.MustRegister(wattHoursSevenDays)
 	registry.MustRegister(wattHoursLifetime)
 
 	go func() {
@@ -304,11 +332,17 @@ func metrics() {
 				var system production
 				json.Unmarshal(systemJSON, &system)
 
-				log.Println("Received system data, current total watts is", system.WattsNow)
-				totalWatts.Set(float64(system.WattsNow))
-				wattHoursSevenDays.Set(float64(system.WattHoursSevenDays))
-				wattHoursLifetime.Set(float64(system.WattHoursLifetime))
-				wattHoursToday.Set(float64(system.WattHoursToday))
+				var productionTelemetry Telemetry
+
+				for _, telm := range system.Production {
+					if telm.Type == "inverters" {
+						productionTelemetry = telm
+					}
+				}
+
+				log.Println("Received system data, current total watts is", productionTelemetry.WNow)
+				totalWatts.Set(float64(productionTelemetry.WNow))
+				wattHoursLifetime.Set(float64(productionTelemetry.WhLifetime))
 			} else {
 				totalWatts.Set(float64(0))
 				log.Println("Error retrieving system data.")
