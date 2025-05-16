@@ -20,7 +20,7 @@ func TestMetricsSuccess(t *testing.T) {
 		}
 		if req.URL.String() == "/production.json" {
 			rw.WriteHeader(http.StatusOK)
-			fmt.Fprintf(rw, "{\"production\":[{\"type\":\"inverters\",\"activeCount\":14,\"readingTime\":0,\"wNow\":10,\"whLifetime\":248190},{\"type\":\"eim\",\"activeCount\":0,\"measurementType\":\"production\",\"readingTime\":1627874283,\"wNow\":0.0,\"whLifetime\":0.0,\"varhLeadLifetime\":0.0,\"varhLagLifetime\":0.0,\"vahLifetime\":0.0,\"rmsCurrent\":2.365,\"rmsVoltage\":236.641,\"reactPwr\":276.755,\"apprntPwr\":279.56,\"pwrFactor\":0.0,\"whToday\":0.0,\"whLastSevenDays\":0.0,\"vahToday\":0.0,\"varhLeadToday\":0.0,\"varhLagToday\":0.0}],\"consumption\":[{\"type\":\"eim\",\"activeCount\":0,\"measurementType\":\"total-consumption\",\"readingTime\":1627874283,\"wNow\":0.0,\"whLifetime\":0.0,\"varhLeadLifetime\":0.0,\"varhLagLifetime\":0.0,\"vahLifetime\":0.0,\"rmsCurrent\":2.074,\"rmsVoltage\":236.704,\"reactPwr\":-276.755,\"apprntPwr\":490.918,\"pwrFactor\":0.0,\"whToday\":0.0,\"whLastSevenDays\":0.0,\"vahToday\":0.0,\"varhLeadToday\":0.0,\"varhLagToday\":0.0},{\"type\":\"eim\",\"activeCount\":0,\"measurementType\":\"net-consumption\",\"readingTime\":1627874283,\"wNow\":-0.0,\"whLifetime\":0.0,\"varhLeadLifetime\":0.0,\"varhLagLifetime\":0.0,\"vahLifetime\":0.0,\"rmsCurrent\":0.291,\"rmsVoltage\":236.766,\"reactPwr\":0.0,\"apprntPwr\":34.442,\"pwrFactor\":0.0,\"whToday\":0,\"whLastSevenDays\":0,\"vahToday\":0,\"varhLeadToday\":0,\"varhLagToday\":0}],\"storage\":[{\"type\":\"acb\",\"activeCount\":0,\"readingTime\":0,\"wNow\":0,\"whNow\":0,\"state\":\"idle\"}]}")
+			fmt.Fprintf(rw, "{\"production\":[{\"type\":\"inverters\",\"activeCount\":14,\"readingTime\":0,\"wNow\":10,\"whLifetime\":248190},{\"type\":\"eim\",\"activeCount\":0,\"measurementType\":\"production\",\"readingTime\":1627874283,\"wNow\":10.0,\"whLifetime\":0.0,\"varhLeadLifetime\":0.0,\"varhLagLifetime\":0.0,\"vahLifetime\":0.0,\"rmsCurrent\":2.365,\"rmsVoltage\":236.641,\"reactPwr\":276.755,\"apprntPwr\":279.56,\"pwrFactor\":0.0,\"whToday\":0.0,\"whLastSevenDays\":0.0,\"vahToday\":0.0,\"varhLeadToday\":0.0,\"varhLagToday\":0.0}],\"consumption\":[{\"type\":\"eim\",\"activeCount\":0,\"measurementType\":\"total-consumption\",\"readingTime\":1627874283,\"wNow\":0.0,\"whLifetime\":0.0,\"varhLeadLifetime\":0.0,\"varhLagLifetime\":0.0,\"vahLifetime\":0.0,\"rmsCurrent\":2.074,\"rmsVoltage\":236.704,\"reactPwr\":-276.755,\"apprntPwr\":490.918,\"pwrFactor\":0.0,\"whToday\":0.0,\"whLastSevenDays\":0.0,\"vahToday\":0.0,\"varhLeadToday\":0.0,\"varhLagToday\":0.0},{\"type\":\"eim\",\"activeCount\":0,\"measurementType\":\"net-consumption\",\"readingTime\":1627874283,\"wNow\":-0.0,\"whLifetime\":0.0,\"varhLeadLifetime\":0.0,\"varhLagLifetime\":0.0,\"vahLifetime\":0.0,\"rmsCurrent\":0.291,\"rmsVoltage\":236.766,\"reactPwr\":0.0,\"apprntPwr\":34.442,\"pwrFactor\":0.0,\"whToday\":0,\"whLastSevenDays\":0,\"vahToday\":0,\"varhLeadToday\":0,\"varhLagToday\":0}],\"storage\":[{\"type\":\"acb\",\"activeCount\":0,\"readingTime\":0,\"wNow\":0,\"whNow\":0,\"state\":\"idle\"}]}")
 		}
 		if req.URL.String() == "/api/v1/production" {
 			rw.WriteHeader(http.StatusOK)
@@ -31,7 +31,7 @@ func TestMetricsSuccess(t *testing.T) {
 	//we need to allow the metrics to collect
 	time.Sleep(time.Duration(250) * time.Millisecond)
 
-	getMetrics(t, handler, 1462)
+	getMetrics(t, handler, 1237)
 }
 
 func TestEnvoyAuthFailure(t *testing.T) {
@@ -77,7 +77,7 @@ func TestSystemJsonFailure(t *testing.T) {
 	if err == nil {
 		t.Errorf("expected error to not be nil")
 	}
-	getMetrics(t, handler, 1448)
+	getMetrics(t, handler, 1236)
 }
 
 func TestStreamsSuccess(t *testing.T) {
